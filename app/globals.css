@@ -1,26 +1,340 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Base colors from the rainbow gradient image */
   --background: #ffffff;
   --foreground: #171717;
+  --card: #f8f8f8;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+
+  /* Primary - vibrant cyan from the gradient (adjusted for light mode) */
+  --primary: #0ea5e9;
+  --primary-foreground: #ffffff;
+
+  /* Secondary - bright pink from the gradient (adjusted for light mode) */
+  --secondary: #e11d48;
+  --secondary-foreground: #ffffff;
+
+  /* Accent - orange from the gradient (adjusted for light mode) */
+  --accent: #ea580c;
+  --accent-foreground: #ffffff;
+
+  /* Muted colors */
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+
+  /* Destructive - keeping the orange theme */
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  /* Borders and inputs */
+  --border: #e2e8f0;
+  --input: #f1f5f9;
+  --ring: #0ea5e9;
+
+  /* Chart colors using the rainbow gradient */
+  --chart-1: #00d4ff; /* Cyan */
+  --chart-2: #6366f1; /* Purple-blue */
+  --chart-3: #ff006b; /* Pink */
+  --chart-4: #ff8c00; /* Orange */
+  --chart-5: #ffd700; /* Yellow */
+
+  /* Sidebar colors */
+  --sidebar: #f8fafc;
+  --sidebar-foreground: #171717;
+  --sidebar-primary: #0ea5e9;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e11d48;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #0ea5e9;
+
+  /* Fonts */
+  --font-sans: var(--font-geist-sans), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), "Fira Code", monospace;
+  --font-serif: ui-serif, Georgia, Cambria, serif;
+
+  /* Radius */
+  --radius: 8px;
+
+  /* Enhanced shadows with gradient colors (light mode) */
+  --shadow-2xs: 0px 1px 2px 0px rgba(14, 165, 233, 0.1);
+  --shadow-xs: 0px 2px 4px 0px rgba(14, 165, 233, 0.15);
+  --shadow-sm:
+    0px 2px 6px 0px rgba(14, 165, 233, 0.2), 0px 1px 2px -1px
+    rgba(225, 29, 72, 0.15);
+  --shadow:
+    0px 4px 8px 0px rgba(14, 165, 233, 0.2), 0px 2px 4px -1px
+    rgba(225, 29, 72, 0.15);
+  --shadow-md:
+    0px 6px 12px 0px rgba(14, 165, 233, 0.25), 0px 2px 6px -1px
+    rgba(225, 29, 72, 0.2);
+  --shadow-lg:
+    0px 8px 16px 0px rgba(14, 165, 233, 0.25), 0px 4px 8px -1px
+    rgba(225, 29, 72, 0.2);
+  --shadow-xl:
+    0px 12px 24px 0px rgba(14, 165, 233, 0.3), 0px 6px 12px -1px
+    rgba(225, 29, 72, 0.25);
+  --shadow-2xl:
+    0px 16px 32px 0px rgba(14, 165, 233, 0.35), 0px 8px 16px -1px
+    rgba(225, 29, 72, 0.3);
+
+  /* Gradient backgrounds inspired by the image */
+  --gradient-primary: linear-gradient(
+    135deg,
+    #00d4ff 0%,
+    #6366f1 50%,
+    #ff006b 100%
+  );
+  --gradient-secondary: linear-gradient(
+    45deg,
+    #ff8c00 0%,
+    #ffd700 50%,
+    #ff006b 100%
+  );
+  --gradient-accent: radial-gradient(
+    circle at center,
+    #00d4ff 0%,
+    #ff006b 70%,
+    #ff8c00 100%
+  );
+}
+
+/* Dark mode explicit (matching the image) */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --card: #1a1a1a;
+  --card-foreground: #f5f5f5;
+  --popover: #1a1a1a;
+  --popover-foreground: #f5f5f5;
+
+  /* Primary - vibrant cyan from the gradient */
+  --primary: #00d4ff;
+  --primary-foreground: #000000;
+
+  /* Secondary - bright pink from the gradient */
+  --secondary: #ff006b;
+  --secondary-foreground: #ffffff;
+
+  /* Accent - orange from the gradient */
+  --accent: #ff8c00;
+  --accent-foreground: #000000;
+
+  /* Muted colors */
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+
+  /* Destructive - keeping the orange theme */
+  --destructive: #ff4500;
+  --destructive-foreground: #ffffff;
+
+  /* Borders and inputs */
+  --border: #333333;
+  --input: #262626;
+  --ring: #00d4ff;
+
+  /* Chart colors using the rainbow gradient */
+  --chart-1: #00d4ff; /* Cyan */
+  --chart-2: #6366f1; /* Purple-blue */
+  --chart-3: #ff006b; /* Pink */
+  --chart-4: #ff8c00; /* Orange */
+  --chart-5: #ffd700; /* Yellow */
+
+  /* Sidebar colors */
+  --sidebar: #0f0f0f;
+  --sidebar-foreground: #ededed;
+  --sidebar-primary: #00d4ff;
+  --sidebar-primary-foreground: #000000;
+  --sidebar-accent: #ff006b;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #333333;
+  --sidebar-ring: #00d4ff;
+
+  /* Enhanced shadows with gradient colors (dark mode) */
+  --shadow-2xs: 0px 1px 2px 0px rgba(0, 212, 255, 0.1);
+  --shadow-xs: 0px 2px 4px 0px rgba(0, 212, 255, 0.15);
+  --shadow-sm:
+    0px 2px 6px 0px rgba(0, 212, 255, 0.2), 0px 1px 2px -1px
+    rgba(255, 0, 107, 0.15);
+  --shadow:
+    0px 4px 8px 0px rgba(0, 212, 255, 0.2), 0px 2px 4px -1px
+    rgba(255, 0, 107, 0.15);
+  --shadow-md:
+    0px 6px 12px 0px rgba(0, 212, 255, 0.25), 0px 2px 6px -1px
+    rgba(255, 0, 107, 0.2);
+  --shadow-lg:
+    0px 8px 16px 0px rgba(0, 212, 255, 0.25), 0px 4px 8px -1px
+    rgba(255, 0, 107, 0.2);
+  --shadow-xl:
+    0px 12px 24px 0px rgba(0, 212, 255, 0.3), 0px 6px 12px -1px
+    rgba(255, 0, 107, 0.25);
+  --shadow-2xl:
+    0px 16px 32px 0px rgba(0, 212, 255, 0.35), 0px 8px 16px -1px
+    rgba(255, 0, 107, 0.3);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+
+  /* Custom gradient utilities */
+  --gradient-primary: var(--gradient-primary);
+  --gradient-secondary: var(--gradient-secondary);
+  --gradient-accent: var(--gradient-accent);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+  }
+
+  /* Custom gradient classes */
+  .bg-gradient-primary {
+    background: var(--gradient-primary);
+  }
+
+  .bg-gradient-secondary {
+    background: var(--gradient-secondary);
+  }
+
+  .bg-gradient-accent {
+    background: var(--gradient-accent);
+  }
+
+  /* Glow effects inspired by the image */
+  .glow-cyan {
+    box-shadow:
+      0 0 20px rgba(0, 212, 255, 0.3),
+      0 0 40px rgba(0, 212, 255, 0.2);
+  }
+
+  .glow-pink {
+    box-shadow:
+      0 0 20px rgba(255, 0, 107, 0.3),
+      0 0 40px rgba(255, 0, 107, 0.2);
+  }
+
+  .glow-orange {
+    box-shadow:
+      0 0 20px rgba(255, 140, 0, 0.3),
+      0 0 40px rgba(255, 140, 0, 0.2);
+  }
+
+  /* Text gradient effects */
+  .text-gradient-primary {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Animated gradient background for special elements */
+  .animate-gradient {
+    background: linear-gradient(
+      -45deg,
+      #00d4ff,
+      #6366f1,
+      #ff006b,
+      #ff8c00,
+      #ffd700
+    );
+    background-size: 400% 400%;
+    animation: gradientShift 8s ease infinite;
+  }
+
+  @keyframes gradientShift {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+
+  /* Animated blob effect for background gradients */
+  @keyframes blob {
+    0% {
+      transform: translate(0px, 0px) scale(1);
+    }
+    33% {
+      transform: translate(30px, -50px) scale(1.1);
+    }
+    66% {
+      transform: translate(-20px, 20px) scale(0.9);
+    }
+    100% {
+      transform: translate(0px, 0px) scale(1);
+    }
+  }
+
+  .animate-blob {
+    animation: blob 7s infinite;
+  }
+
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
 }
