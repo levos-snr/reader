@@ -112,8 +112,9 @@ export const searchDocuments = action({
     if (args.revisionSetId) {
       const filteredChunks: Array<{ text: string; metadata?: any }> = [];
       
-      for (const chunk of searchResults.chunks) {
-        const docId = chunk.metadata?.documentId;
+      // Use entries instead of chunks
+      for (const entry of searchResults.entries) {
+        const docId = entry.metadata?.documentId;
         if (!docId) continue;
         
         const revisionSetId = await ctx.runQuery(
@@ -125,8 +126,8 @@ export const searchDocuments = action({
         
         if (revisionSetId === args.revisionSetId) {
           filteredChunks.push({
-            text: chunk.text || "",
-            metadata: chunk.metadata,
+            text: entry.metadata?.text || "",
+            metadata: entry.metadata,
           });
         }
       }
@@ -137,12 +138,13 @@ export const searchDocuments = action({
       };
     }
 
+    // Use entries instead of chunks
     return {
-      chunks: searchResults.chunks.map((chunk: any) => ({
-        text: chunk.text || "",
-        metadata: chunk.metadata,
+      chunks: searchResults.entries.map((entry: any) => ({
+        text: entry.metadata?.text || "",
+        metadata: entry.metadata,
       })),
-      text: searchResults.chunks.map((chunk: any) => chunk.text || "").join("\n\n"),
+      text: searchResults.entries.map((entry: any) => entry.metadata?.text || "").join("\n\n"),
     };
   },
 });
@@ -195,13 +197,13 @@ export const getDocumentContext = action({
           ],
         });
 
-        // Filter chunks that belong to this material
-        const materialChunks = searchResults.chunks
+        // Filter entries that belong to this material - use entries instead of chunks
+        const materialChunks = searchResults.entries
           .filter(
-            (chunk: any) =>
-              chunk.metadata?.documentId === material._id.toString()
+            (entry: any) =>
+              entry.metadata?.documentId === material._id.toString()
           )
-          .map((chunk: any) => chunk.text || "");
+          .map((entry: any) => entry.metadata?.text || "");
 
         allChunks.push(...materialChunks);
       }
