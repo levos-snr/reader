@@ -2,7 +2,7 @@ import { components } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { authComponent } from "./auth";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { openai } from "@ai-sdk/openai";
 
 // Initialize RAG component
@@ -31,9 +31,12 @@ export const processDocumentForRAG = internalAction({
     // Add chunks to RAG with metadata
     const chunkEntries = await Promise.all(
       chunks.map(async (chunk, i) => {
-        const embedding = await embeddingModel.doEmbed({
+        const embeddingResult = await embeddingModel.doEmbed({
           values: [chunk],
         });
+        
+        // Access embeddings array from result
+        const embedding = embeddingResult.embeddings[0];
         
         return {
           content: {
@@ -44,16 +47,16 @@ export const processDocumentForRAG = internalAction({
               totalChunks: chunks.length,
             },
           },
-          embedding: embedding[0],
+          embedding: embedding,
         };
       })
     );
 
-    // Insert chunks in batches
+    // Insert chunks in batches using runMutation
     const batchSize = 10;
     for (let i = 0; i < chunkEntries.length; i += batchSize) {
       const batch = chunkEntries.slice(i, i + batchSize);
-      await rag.chunks.insert(ctx, {
+      await ctx.runMutation(rag.chunks.insert, {
         namespace: args.namespace,
         entryId: `${args.documentId}_entry`,
         startOrder: i,
@@ -86,14 +89,17 @@ export const searchDocuments = action({
 
     // Generate embedding for query
     const embeddingModel = openai.embedding("text-embedding-3-small");
-    const queryEmbedding = await embeddingModel.doEmbed({
+    const embeddingResult = await embeddingModel.doEmbed({
       values: [args.query],
     });
+    
+    // Access embeddings array from result
+    const queryEmbedding = embeddingResult.embeddings[0];
 
-    // Search RAG
-    const searchResults = await rag.search(ctx, {
+    // Search RAG using runAction
+    const searchResults = await ctx.runAction(rag.search, {
       namespace: args.namespace,
-      embedding: queryEmbedding[0],
+      embedding: queryEmbedding,
       limit: args.limit || 10,
       modelId: "text-embedding-3-small",
       filters: [],
@@ -169,13 +175,16 @@ export const getDocumentContext = action({
     for (const material of materials) {
       if (material.extractedContent) {
         const queryText = material.extractedContent.substring(0, 100);
-        const queryEmbedding = await embeddingModel.doEmbed({
+        const embeddingResult = await embeddingModel.doEmbed({
           values: [queryText],
         });
+        
+        // Access embeddings array from result
+        const queryEmbedding = embeddingResult.embeddings[0];
 
-        const searchResults = await rag.search(ctx, {
+        const searchResults = await ctx.runAction(rag.search, {
           namespace: args.namespace,
-          embedding: queryEmbedding[0],
+          embedding: queryEmbedding,
           limit: 50,
           modelId: "text-embedding-3-small",
           filters: [],
