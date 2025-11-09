@@ -53,12 +53,12 @@ export const processDocumentForRAG = internalAction({
     );
 
     // Insert chunks in batches using runMutation
+    // Use entryId that includes namespace for filtering
     const batchSize = 10;
     for (let i = 0; i < chunkEntries.length; i += batchSize) {
       const batch = chunkEntries.slice(i, i + batchSize);
       await ctx.runMutation(rag.chunks.insert, {
-        namespace: args.namespace,
-        entryId: `${args.documentId}_entry`,
+        entryId: `${args.namespace}:${args.documentId}_entry`,
         startOrder: i,
         chunks: batch,
       });
@@ -96,13 +96,16 @@ export const searchDocuments = action({
     // Access embeddings array from result
     const queryEmbedding = embeddingResult.embeddings[0];
 
-    // Search RAG using runAction
-    const searchResults = await ctx.runAction(rag.search, {
+    // Search RAG using runAction - rag.search is an object with a search property
+    // Use filters to filter by namespace (encoded in entryId)
+    const searchResults = await ctx.runAction(rag.search.search, {
       namespace: args.namespace,
       embedding: queryEmbedding,
       limit: args.limit || 10,
       modelId: "text-embedding-3-small",
-      filters: [],
+      filters: [
+        { name: "entryId", value: args.namespace },
+      ],
     });
 
     // Filter by revisionSetId if provided
@@ -182,12 +185,14 @@ export const getDocumentContext = action({
         // Access embeddings array from result
         const queryEmbedding = embeddingResult.embeddings[0];
 
-        const searchResults = await ctx.runAction(rag.search, {
+        const searchResults = await ctx.runAction(rag.search.search, {
           namespace: args.namespace,
           embedding: queryEmbedding,
           limit: 50,
           modelId: "text-embedding-3-small",
-          filters: [],
+          filters: [
+            { name: "entryId", value: args.namespace },
+          ],
         });
 
         // Filter chunks that belong to this material
