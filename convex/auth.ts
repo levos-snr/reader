@@ -53,17 +53,10 @@ export { createAuth }
  * Added caching with zero-arg query to avoid repeated auth lookups
  */
 export const getCurrentUser = query({
-  args: {},
   handler: async (ctx) => {
-    try {
-      const user = await authComponent.getAuthUser(ctx)
-      return user || null
-    } catch (error) {
-      console.error("Error getting current user:", error)
-      return null
-    }
+    return await authComponent.getAuthUser(ctx);
   },
-})
+});
 
 /**
  * Get user profile from your app's user table

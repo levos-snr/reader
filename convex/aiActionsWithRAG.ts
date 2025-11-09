@@ -38,7 +38,11 @@ export const generateNotesWithRAG = action({
     apiKey: v.optional(v.string()),
     provider: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    content: string;
+    threadId: string;
+    tokensUsed: number;
+  }> => {
     const authUser = await getAuthUser(ctx);
     const preferences = await getUserPreferences(ctx);
 
@@ -73,7 +77,7 @@ export const generateNotesWithRAG = action({
       userId: authUser._id.toString(),
     });
 
-    const prompt = `Generate ${args.style || "detailed"} study notes from the uploaded documents.
+    const prompt: string = `Generate ${args.style || "detailed"} study notes from the uploaded documents.
 
 Available document context:
 ${documentContext.context || "No documents found. Please upload documents first."}
@@ -105,7 +109,11 @@ export const generateFlashcardsWithRAG = action({
     apiKey: v.optional(v.string()),
     provider: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    flashcards: Array<{ front: string; back: string }>;
+    threadId: string;
+    tokensUsed: number;
+  }> => {
     const authUser = await getAuthUser(ctx);
     const preferences = await getUserPreferences(ctx);
 
@@ -134,7 +142,7 @@ export const generateFlashcardsWithRAG = action({
       userId: authUser._id.toString(),
     });
 
-    const prompt = `Create ${args.count} flashcards from the uploaded documents in revision set ${args.revisionSetId}.
+    const prompt: string = `Create ${args.count} flashcards from the uploaded documents in revision set ${args.revisionSetId}.
 
 Difficulty level: ${args.difficulty || "medium"}
 
@@ -171,7 +179,18 @@ export const generateQuizWithRAG = action({
     apiKey: v.optional(v.string()),
     provider: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    questions: Array<{
+      questionId: string;
+      question: string;
+      options: string[];
+      correctAnswer: number;
+      explanation: string;
+      difficulty?: string;
+    }>;
+    threadId: string;
+    tokensUsed: number;
+  }> => {
     const authUser = await getAuthUser(ctx);
     const preferences = await getUserPreferences(ctx);
 
@@ -200,7 +219,7 @@ export const generateQuizWithRAG = action({
       userId: authUser._id.toString(),
     });
 
-    const prompt = `Create ${args.count} multiple-choice quiz questions from the uploaded documents in revision set ${args.revisionSetId}.
+    const prompt: string = `Create ${args.count} multiple-choice quiz questions from the uploaded documents in revision set ${args.revisionSetId}.
 
 Difficulty: ${args.difficulty || "medium"}
 
@@ -241,7 +260,17 @@ export const generatePracticeExercisesWithRAG = action({
     apiKey: v.optional(v.string()),
     provider: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    exercises: Array<{
+      question: string;
+      solution: string;
+      hints: string[];
+      difficulty?: string;
+      topic?: string;
+    }>;
+    threadId: string;
+    tokensUsed: number;
+  }> => {
     const authUser = await getAuthUser(ctx);
     const preferences = await getUserPreferences(ctx);
 
@@ -270,7 +299,7 @@ export const generatePracticeExercisesWithRAG = action({
       userId: authUser._id.toString(),
     });
 
-    const prompt = `Create ${args.count} practice exercises from the uploaded documents in revision set ${args.revisionSetId}.
+    const prompt: string = `Create ${args.count} practice exercises from the uploaded documents in revision set ${args.revisionSetId}.
 
 Difficulty: ${args.difficulty || "medium"}
 
@@ -309,7 +338,11 @@ export const findSimilarPastPapers = action({
     apiKey: v.optional(v.string()),
     provider: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    analysis: string;
+    threadId: string;
+    tokensUsed: number;
+  }> => {
     const authUser = await getAuthUser(ctx);
     const preferences = await getUserPreferences(ctx);
 
@@ -338,7 +371,7 @@ export const findSimilarPastPapers = action({
       userId: authUser._id.toString(),
     });
 
-    const prompt = `Find and analyze past papers similar to: ${args.query}
+    const prompt: string = `Find and analyze past papers similar to: ${args.query}
 
 Search through the uploaded past papers and provide:
 1. Similar papers found

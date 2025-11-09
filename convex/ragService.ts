@@ -3,8 +3,7 @@ import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { authComponent } from "./auth";
 import { api } from "./_generated/api";
-import { createTool } from "@convex-dev/agent";
-import { z } from "zod/v3";
+import { openai } from "@ai-sdk/openai";
 
 // Initialize RAG component
 const rag = components.rag;
@@ -19,24 +18,46 @@ export const processDocumentForRAG = internalAction({
     content: v.string(),
     namespace: v.string(), // User-specific namespace
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ chunksProcessed: number }> => {
     // Chunk the document content
     const chunks = chunkText(args.content, {
       chunkSize: 1000,
       chunkOverlap: 200,
     });
 
+    // Generate embeddings for chunks
+    const embeddingModel = openai.embedding("text-embedding-3-small");
+    
     // Add chunks to RAG with metadata
-    for (let i = 0; i < chunks.length; i++) {
-      await rag.add(ctx, {
+    const chunkEntries = await Promise.all(
+      chunks.map(async (chunk, i) => {
+        const embedding = await embeddingModel.doEmbed({
+          values: [chunk],
+        });
+        
+        return {
+          content: {
+            text: chunk,
+            metadata: {
+              documentId: args.documentId,
+              chunkIndex: i,
+              totalChunks: chunks.length,
+            },
+          },
+          embedding: embedding[0],
+        };
+      })
+    );
+
+    // Insert chunks in batches
+    const batchSize = 10;
+    for (let i = 0; i < chunkEntries.length; i += batchSize) {
+      const batch = chunkEntries.slice(i, i + batchSize);
+      await rag.chunks.insert(ctx, {
         namespace: args.namespace,
-        key: `${args.documentId}_chunk_${i}`,
-        text: chunks[i],
-        metadata: {
-          documentId: args.documentId,
-          chunkIndex: i,
-          totalChunks: chunks.length,
-        },
+        entryId: `${args.documentId}_entry`,
+        startOrder: i,
+        chunks: batch,
       });
     }
 
@@ -54,32 +75,66 @@ export const searchDocuments = action({
     limit: v.optional(v.number()),
     revisionSetId: v.optional(v.id("revisionSets")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    chunks: Array<{ text: string; metadata?: any }>;
+    text: string;
+  }> => {
     const authUser = await authComponent.getAuthUser(ctx);
     if (!authUser) {
       throw new Error("Not authenticated");
     }
 
+    // Generate embedding for query
+    const embeddingModel = openai.embedding("text-embedding-3-small");
+    const queryEmbedding = await embeddingModel.doEmbed({
+      values: [args.query],
+    });
+
+    // Search RAG
     const searchResults = await rag.search(ctx, {
       namespace: args.namespace,
-      query: args.query,
+      embedding: queryEmbedding[0],
       limit: args.limit || 10,
+      modelId: "text-embedding-3-small",
+      filters: [],
     });
 
     // Filter by revisionSetId if provided
     if (args.revisionSetId) {
-      const filtered = searchResults.chunks.filter((chunk) => {
+      const filteredChunks: Array<{ text: string; metadata?: any }> = [];
+      
+      for (const chunk of searchResults.chunks) {
         const docId = chunk.metadata?.documentId;
-        if (!docId) return false;
-        // Get document and check revisionSetId
-        return ctx.runQuery(api.studyMaterials.getMaterialRevisionSet, {
-          materialId: docId as any,
-        }).then((revisionSetId) => revisionSetId === args.revisionSetId);
-      });
-      return { ...searchResults, chunks: filtered };
+        if (!docId) continue;
+        
+        const revisionSetId = await ctx.runQuery(
+          api.studyMaterials.getMaterialRevisionSet,
+          {
+            materialId: docId as any,
+          }
+        );
+        
+        if (revisionSetId === args.revisionSetId) {
+          filteredChunks.push({
+            text: chunk.text || "",
+            metadata: chunk.metadata,
+          });
+        }
+      }
+      
+      return {
+        chunks: filteredChunks,
+        text: filteredChunks.map((c) => c.text).join("\n\n"),
+      };
     }
 
-    return searchResults;
+    return {
+      chunks: searchResults.chunks.map((chunk: any) => ({
+        text: chunk.text || "",
+        metadata: chunk.metadata,
+      })),
+      text: searchResults.chunks.map((chunk: any) => chunk.text || "").join("\n\n"),
+    };
   },
 });
 
@@ -91,7 +146,11 @@ export const getDocumentContext = action({
     revisionSetId: v.id("revisionSets"),
     namespace: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{
+    context: string;
+    documentCount: number;
+    totalChunks: number;
+  }> => {
     const authUser = await authComponent.getAuthUser(ctx);
     if (!authUser) {
       throw new Error("Not authenticated");
@@ -105,21 +164,30 @@ export const getDocumentContext = action({
 
     // Search for all chunks from these documents
     const allChunks: string[] = [];
+    const embeddingModel = openai.embedding("text-embedding-3-small");
+    
     for (const material of materials) {
       if (material.extractedContent) {
+        const queryText = material.extractedContent.substring(0, 100);
+        const queryEmbedding = await embeddingModel.doEmbed({
+          values: [queryText],
+        });
+
         const searchResults = await rag.search(ctx, {
           namespace: args.namespace,
-          query: material.extractedContent.substring(0, 100), // Use first 100 chars as query
+          embedding: queryEmbedding[0],
           limit: 50,
+          modelId: "text-embedding-3-small",
+          filters: [],
         });
 
         // Filter chunks that belong to this material
         const materialChunks = searchResults.chunks
           .filter(
-            (chunk) =>
+            (chunk: any) =>
               chunk.metadata?.documentId === material._id.toString()
           )
-          .map((chunk) => chunk.text);
+          .map((chunk: any) => chunk.text || "");
 
         allChunks.push(...materialChunks);
       }

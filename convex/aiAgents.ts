@@ -1,7 +1,7 @@
 import { Agent } from "@convex-dev/agent";
 import { components } from "./_generated/api";
 import { openai, createOpenAI } from "@ai-sdk/openai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createTool } from "@convex-dev/agent";
 import { z } from "zod/v3";
 import { usageHandler } from "./rate";
@@ -28,8 +28,8 @@ export function createSpecializedAgent(
 
   if (provider === "anthropic") {
     const client = apiKey
-      ? anthropic({ apiKey })
-      : anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
+      ? createAnthropic({ apiKey })
+      : createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY || "" });
     languageModel = client("claude-3-5-sonnet-20241022");
     // Anthropic doesn't have embeddings, use OpenAI for embeddings
     textEmbeddingModel = openai.embedding("text-embedding-3-small");
@@ -85,7 +85,7 @@ export function createNotesAgent(
       });
 
       return searchResults.chunks
-        .map((chunk: any) => chunk.text)
+        .map((chunk: { text: string }) => chunk.text)
         .join("\n\n---\n\n");
     },
   });
@@ -139,7 +139,7 @@ export function createFlashcardsAgent(
       });
 
       return searchResults.chunks
-        .map((chunk: any) => chunk.text)
+        .map((chunk: { text: string }) => chunk.text)
         .join("\n\n");
     },
   });
@@ -191,7 +191,7 @@ export function createQuizzesAgent(
       });
 
       return searchResults.chunks
-        .map((chunk: any) => chunk.text)
+        .map((chunk: { text: string }) => chunk.text)
         .join("\n\n");
     },
   });
@@ -244,7 +244,7 @@ export function createPracticeExercisesAgent(
       });
 
       return searchResults.chunks
-        .map((chunk: any) => chunk.text)
+        .map((chunk: { text: string }) => chunk.text)
         .join("\n\n");
     },
   });
@@ -297,7 +297,7 @@ export function createPastPapersAgent(
       });
 
       return searchResults.chunks
-        .map((chunk: any) => chunk.text)
+        .map((chunk: { text: string }) => chunk.text)
         .join("\n\n");
     },
   });
