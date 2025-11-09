@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { authComponent } from "./auth"
+import { api } from "./_generated/api";
 
 async function getAuthUser(ctx: any) {
   const authUser = await authComponent.getAuthUser(ctx)
@@ -193,4 +194,21 @@ export const getFileUrl = query({
     }
   },
 })
+
+// Get material by ID
+export const getMaterialById = query({
+  args: { materialId: v.id("studyMaterials") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.materialId);
+  },
+});
+
+// Get revision set ID for a material
+export const getMaterialRevisionSet = query({
+  args: { materialId: v.id("studyMaterials") },
+  handler: async (ctx, args) => {
+    const material = await ctx.db.get(args.materialId);
+    return material?.revisionSetId;
+  },
+});
 
