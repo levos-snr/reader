@@ -40,23 +40,23 @@ export default defineSchema({
     .index("by_email", ["email"]),
 
   revisionSets: defineTable({
-  title: v.string(),
-  slug: v.optional(v.string()),
-  description: v.optional(v.string()),
-  subject: v.optional(v.string()),
-  examDate: v.optional(v.number()), // timestamp
-  coverImage: v.optional(v.id("_storage")), // Convex file storage
-  authId: v.string(),
-  tags: v.optional(v.array(v.string())),
-  color: v.optional(v.string()), // hex color or theme color name
-  progress: v.optional(v.number()), // 0-100 percentage
-  status: v.optional(v.string()), // "active", "completed", "archived"
-  createdAt: v.number(),
-  updatedAt: v.number(),
-})
-  .index("by_authId", ["authId"])
-  .index("by_status", ["status"])
-  .index("by_slug", ["slug"]), 
+    title: v.string(),
+    slug: v.optional(v.string()),
+    description: v.optional(v.string()),
+    subject: v.optional(v.string()),
+    examDate: v.optional(v.number()), // timestamp
+    coverImage: v.optional(v.id("_storage")), // Convex file storage
+    authId: v.string(),
+    tags: v.optional(v.array(v.string())),
+    color: v.optional(v.string()), // hex color or theme color name
+    progress: v.optional(v.number()), // 0-100 percentage
+    status: v.optional(v.string()), // "active", "completed", "archived"
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_authId", ["authId"])
+    .index("by_status", ["status"])
+    .index("by_slug", ["slug"]), 
 
   // Study Materials with file storage
   studyMaterials: defineTable({
@@ -447,4 +447,66 @@ export default defineSchema({
   })
     .index("by_course", ["courseId"])
     .index("by_authId", ["authId"]),
+
+  // Vector Embeddings table for RAG
+  documentEmbeddings: defineTable({
+    documentId: v.id("studyMaterials"),
+    revisionSetId: v.optional(v.id("revisionSets")),
+    namespace: v.string(),
+    chunkIndex: v.number(),
+    totalChunks: v.number(),
+    text: v.string(),
+    embedding: v.array(v.float64()),
+    embeddingModel: v.string(),
+    userId: v.string(),
+    createdAt: v.number(),
+  })
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1536,
+      filterFields: ["namespace", "revisionSetId"],
+    })
+    .index("by_document", ["documentId"])
+    .index("by_namespace", ["namespace"])
+    .index("by_revisionSet", ["revisionSetId"])
+    .index("by_user", ["userId"]),
+
+  // Past Paper Embeddings table (separate namespace)
+  pastPaperEmbeddings: defineTable({
+    pastPaperId: v.id("pastPapers"),
+    revisionSetId: v.optional(v.id("revisionSets")),
+    namespace: v.string(),
+    chunkIndex: v.number(),
+    totalChunks: v.number(),
+    text: v.string(),
+    embedding: v.array(v.float64()),
+    embeddingModel: v.string(),
+    userId: v.string(),
+    createdAt: v.number(),
+  })
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1536,
+      filterFields: ["namespace", "revisionSetId"],
+    })
+    .index("by_pastPaper", ["pastPaperId"])
+    .index("by_namespace", ["namespace"])
+    .index("by_revisionSet", ["revisionSetId"])
+    .index("by_user", ["userId"]),
+
+  // RAG Processing Status
+  ragProcessingStatus: defineTable({
+    documentId: v.id("studyMaterials"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    chunksProcessed: v.number(),
+    embeddingsGenerated: v.number(),
+    errorMessage: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+  }).index("by_document", ["documentId"]),
 })

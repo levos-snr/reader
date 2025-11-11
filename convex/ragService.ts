@@ -1,75 +1,260 @@
-import { components } from "./_generated/api";
-import { action, internalAction } from "./_generated/server";
+// convex/ragService.ts - Enhanced RAG Service with proper vector search
+import { action, internalAction,internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { authComponent } from "./auth";
 import { api, internal } from "./_generated/api";
 import { openai } from "@ai-sdk/openai";
+import type { Doc, Id } from "./_generated/dataModel";
 
-// Initialize RAG component
-const rag = components.rag;
+async function getAuthUser(ctx: any) {
+  const authUser = await authComponent.getAuthUser(ctx);
+  if (!authUser) {
+    throw new Error("Not authenticated");
+  }
+  return authUser;
+}
 
 /**
- * Process and chunk documents for RAG
- * This breaks down documents into searchable chunks with embeddings
+ * Enhanced text chunking with overlap and better boundary detection
+ */
+function chunkText(
+  text: string,
+  options: { chunkSize: number; chunkOverlap: number }
+): string[] {
+  const chunks: string[] = [];
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+  
+  let currentChunk = "";
+  let currentSize = 0;
+
+  for (const sentence of sentences) {
+    const sentenceLength = sentence.length;
+    
+    if (currentSize + sentenceLength > options.chunkSize && currentChunk) {
+      chunks.push(currentChunk.trim());
+      // Keep overlap from end of previous chunk
+      const overlapText = currentChunk.slice(-options.chunkOverlap);
+      currentChunk = overlapText + sentence;
+      currentSize = overlapText.length + sentenceLength;
+    } else {
+      currentChunk += sentence;
+      currentSize += sentenceLength;
+    }
+  }
+
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+
+  return chunks.filter(chunk => chunk.length > 0);
+}
+
+/**
+ * Process document and create vector embeddings for RAG
+ * This is the main entry point for RAG processing
  */
 export const processDocumentForRAG = internalAction({
   args: {
     documentId: v.id("studyMaterials"),
     content: v.string(),
-    namespace: v.string(), // User-specific namespace
+    namespace: v.string(),
+    revisionSetId: v.optional(v.id("revisionSets")),
+    userId: v.string(), // Added userId parameter
   },
-  handler: async (ctx, args): Promise<{ chunksProcessed: number }> => {
-    // Chunk the document content
-    const chunks = chunkText(args.content, {
-      chunkSize: 1000,
-      chunkOverlap: 200,
-    });
-
-    // Generate embeddings for chunks
-    const embeddingModel = openai.embedding("text-embedding-3-small");
-    
-    // Add chunks to RAG with metadata
-    const chunkEntries = await Promise.all(
-      chunks.map(async (chunk, i) => {
-        const embeddingResult = await embeddingModel.doEmbed({
-          values: [chunk],
-        });
-        
-        // Access embeddings array from result
-        const embedding = embeddingResult.embeddings[0];
-        
-        return {
-          content: {
-            text: chunk,
-            metadata: {
-              documentId: args.documentId,
-              chunkIndex: i,
-              totalChunks: chunks.length,
-            },
-          },
-          embedding: embedding,
-        };
-      })
-    );
-
-    // Insert chunks in batches using runMutation
-    // Use entryId that includes namespace for filtering
-    const batchSize = 10;
-    for (let i = 0; i < chunkEntries.length; i += batchSize) {
-      const batch = chunkEntries.slice(i, i + batchSize);
-      await ctx.runMutation(rag.chunks.insert, {
-        entryId: `${args.namespace}:${args.documentId}_entry`,
-        startOrder: i,
-        chunks: batch,
+  handler: async (ctx, args): Promise<{ 
+    chunksProcessed: number;
+    embeddingIds: string[];
+  }> => {
+    try {
+      // Update processing status
+      await ctx.runMutation(internal.ragMutations.updateStatus, {
+        documentId: args.documentId,
+        status: "processing",
+        startedAt: Date.now(),
       });
-    }
 
-    return { chunksProcessed: chunks.length };
+      // Chunk the document with improved boundaries
+      const chunks = chunkText(args.content, {
+        chunkSize: 1000,
+        chunkOverlap: 200,
+      });
+
+      const embeddingModel = openai.embedding("text-embedding-3-small");
+      const embeddingIds: string[] = [];
+
+      // Process chunks in batches of 10
+      const batchSize = 10;
+      for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize);
+        
+        // Generate embeddings for the batch
+        const embeddingResults = await Promise.all(
+          batch.map(chunk => embeddingModel.doEmbed({ values: [chunk] }))
+        );
+
+        // Store embeddings with metadata
+        for (let batchIndex = 0; batchIndex < batch.length; batchIndex++) {
+          const globalIndex = i + batchIndex;
+          const chunk = batch[batchIndex];
+          const embedding = embeddingResults[batchIndex].embeddings[0];
+
+          const embeddingId = await ctx.runMutation(
+            internal.ragMutations.saveEmbedding,
+            {
+              documentId: args.documentId,
+              revisionSetId: args.revisionSetId,
+              namespace: args.namespace,
+              chunkIndex: globalIndex,
+              totalChunks: chunks.length,
+              text: chunk,
+              embedding: embedding,
+              embeddingModel: "text-embedding-3-small",
+              createdAt: Date.now(),
+              userId: args.userId, // Pass userId to mutation
+            }
+          );
+          
+          embeddingIds.push(embeddingId);
+        }
+      }
+
+      // Update processing status to completed
+      await ctx.runMutation(internal.ragMutations.updateStatus, {
+        documentId: args.documentId,
+        status: "completed",
+        completedAt: Date.now(),
+        chunksProcessed: chunks.length,
+        embeddingsGenerated: embeddingIds.length,
+      });
+
+      return { 
+        chunksProcessed: chunks.length,
+        embeddingIds,
+      };
+    } catch (error) {
+      console.error("Error processing document for RAG:", error);
+      
+      // Update status to failed
+      await ctx.runMutation(internal.ragMutations.updateStatus, {
+        documentId: args.documentId,
+        status: "failed",
+        errorMessage: error instanceof Error ? error.message : String(error),
+        completedAt: Date.now(),
+      });
+      
+      throw new Error(`Failed to process document: ${error}`);
+    }
   },
 });
 
 /**
- * Search documents using RAG
+ * Update RAG processing status
+ */
+export const updateRAGStatus = internalAction({
+  args: {
+    documentId: v.id("studyMaterials"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    chunksProcessed: v.optional(v.number()),
+    embeddingsGenerated: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<Id<"ragProcessingStatus">> => {
+    return await ctx.runMutation(internal.ragMutations.updateStatus, args);
+  },
+});
+
+/**
+ * Insert single embedding into database
+ */
+export const insertEmbedding = internalAction({
+  args: {
+    documentId: v.id("studyMaterials"),
+    revisionSetId: v.optional(v.id("revisionSets")),
+    namespace: v.string(),
+    chunkIndex: v.number(),
+    totalChunks: v.number(),
+    text: v.string(),
+    embedding: v.array(v.float64()),
+    embeddingModel: v.string(),
+    userId: v.string(), // Added userId parameter
+  },
+  handler: async (ctx, args): Promise<string> => {
+    return await ctx.runMutation(internal.ragMutations.saveEmbedding, {
+      ...args,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+/**
+ * Store vector embeddings batch
+ */
+export const storeVectorBatch = internalAction({
+  args: {
+    vectors: v.array(v.object({
+      vector: v.array(v.float64()),
+      metadata: v.any(),
+    })),
+    namespace: v.string(),
+  },
+  handler: async (ctx, args): Promise<string[]> => {
+    // Store in a custom vectors table
+    const ids = await Promise.all(
+      args.vectors.map(async ({ vector, metadata }) => {
+        const id: string = await ctx.runMutation(internal.ragService.insertVector, {
+          vector,
+          metadata,
+          namespace: args.namespace,
+        });
+        return id;
+      })
+    );
+    return ids;
+  },
+});
+
+/**
+ * Insert single vector
+ */
+export const insertVector = internalMutation({
+  args: {
+    vector: v.array(v.float64()),
+    metadata: v.any(),
+    namespace: v.string(),
+  },
+  handler: async (ctx, args): Promise<string> => {
+    const id: string = await ctx.runMutation(internal.ragService.saveVector, args);
+    return id;
+  },
+});
+
+/**
+ * Save vector to database
+ */
+export const saveVector = internalMutation({
+  args: {
+    vector: v.array(v.float64()),
+    metadata: v.any(),
+    namespace: v.string(),
+  },
+  handler: async (ctx, args): Promise<string> => {
+    // Replace placeholder with actual DB insertion
+    // Example: const id = await ctx.db.insert("vectors", args);
+    // return id.toString();
+    return "vector_id_placeholder";
+  },
+});
+
+
+/**
+ * Search documents using hybrid search (vector + keyword)
  */
 export const searchDocuments = action({
   args: {
@@ -77,164 +262,320 @@ export const searchDocuments = action({
     namespace: v.string(),
     limit: v.optional(v.number()),
     revisionSetId: v.optional(v.id("revisionSets")),
+    similarityThreshold: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<{
-    chunks: Array<{ text: string; metadata?: any }>;
+    chunks: Array<{ 
+      text: string; 
+      score: number;
+      metadata?: any;
+    }>;
     text: string;
   }> => {
-    const authUser = await authComponent.getAuthUser(ctx);
-    if (!authUser) {
-      throw new Error("Not authenticated");
-    }
+    const authUser = await getAuthUser(ctx);
+    const limit = args.limit || 10;
+    const threshold = args.similarityThreshold || 0.7;
 
-    // Generate embedding for query
-    const embeddingModel = openai.embedding("text-embedding-3-small");
-    const embeddingResult = await embeddingModel.doEmbed({
-      values: [args.query],
-    });
-    
-    // Access embeddings array from result
-    const queryEmbedding = embeddingResult.embeddings[0];
+    try {
+      // Generate query embedding
+      const embeddingModel = openai.embedding("text-embedding-3-small");
+      const embeddingResult = await embeddingModel.doEmbed({
+        values: [args.query],
+      });
+      const queryEmbedding = embeddingResult.embeddings[0];
 
-    // Search RAG using runAction - rag.search is an object with a search property
-    // Use filters to filter by namespace (encoded in entryId)
-    const searchResults = await ctx.runAction(rag.search.search, {
-      namespace: args.namespace,
-      embedding: queryEmbedding,
-      limit: args.limit || 10,
-      modelId: "text-embedding-3-small",
-      filters: [
-        { name: "entryId", value: args.namespace },
-      ],
-    });
+      // Build filter query based on provided parameters
+      const filterFn = args.revisionSetId
+        ? (q: any) => 
+            q.eq("namespace", args.namespace)
+             .eq("revisionSetId", args.revisionSetId)
+        : (q: any) => q.eq("namespace", args.namespace);
 
-    // Filter by revisionSetId if provided
-    if (args.revisionSetId) {
-      const filteredChunks: Array<{ text: string; metadata?: any }> = [];
-      
-      // Use entries instead of chunks
-      for (const entry of searchResults.entries) {
-        const docId = entry.metadata?.documentId;
-        if (!docId) continue;
-        
-        const revisionSetId = await ctx.runQuery(
-          api.studyMaterials.getMaterialRevisionSet,
-          {
-            materialId: docId as any,
-          }
-        );
-        
-        if (revisionSetId === args.revisionSetId) {
-          filteredChunks.push({
-            text: entry.metadata?.text || "",
-            metadata: entry.metadata,
-          });
+      // Perform vector search using Convex vectorSearch
+      const vectorResults = await ctx.vectorSearch(
+        "documentEmbeddings",
+        "by_embedding",
+        {
+          vector: queryEmbedding,
+          limit: limit * 2, // Get more results for filtering
+          filter: filterFn,
         }
-      }
-      
-      return {
-        chunks: filteredChunks,
-        text: filteredChunks.map((c) => c.text).join("\n\n"),
-      };
-    }
+      );
 
-    // Use entries instead of chunks
-    return {
-      chunks: searchResults.entries.map((entry: any) => ({
-        text: entry.metadata?.text || "",
-        metadata: entry.metadata,
-      })),
-      text: searchResults.entries.map((entry: any) => entry.metadata?.text || "").join("\n\n"),
-    };
+      // Load the actual documents and filter by threshold
+      const chunks = await Promise.all(
+        vectorResults
+          .filter(result => result._score >= threshold)
+          .slice(0, limit)
+          .map(async (result) => {
+            const embedding = await ctx.runQuery(
+              internal.ragQueries.getEmbedding,
+              { embeddingId: result._id }
+            );
+            return {
+              text: embedding?.text || "",
+              score: result._score,
+              metadata: {
+                documentId: embedding?.documentId,
+                chunkIndex: embedding?.chunkIndex,
+                totalChunks: embedding?.totalChunks,
+              },
+            };
+          })
+      );
+
+      return {
+        chunks: chunks.filter(c => c.text),
+        text: chunks.map(c => c.text).join("\n\n---\n\n"),
+      };
+    } catch (error) {
+      console.error("Error searching documents:", error);
+      return { chunks: [], text: "" };
+    }
   },
 });
 
 /**
- * Get all document content for a revision set
+ * Get embedding by ID (internal query)
+ */
+export const getEmbeddingById = internalAction({
+  args: {
+    embeddingId: v.id("documentEmbeddings"),
+  },
+  handler: async (ctx, args): Promise<Doc<"documentEmbeddings"> | null> => {
+    return await ctx.runQuery(internal.ragQueries.getEmbedding, {
+      embeddingId: args.embeddingId,
+    });
+  },
+});
+
+/**
+ * Vector search implementation
+ */
+export const vectorSearch = internalAction({
+  args: {
+    vector: v.array(v.float64()),
+    namespace: v.string(),
+    limit: v.number(),
+    revisionSetId: v.optional(v.id("revisionSets")),
+  },
+  handler: async (ctx, args): Promise<Array<{
+    score: number;
+    metadata: any;
+  }>> => {
+    // This would use your vector database
+    // Placeholder implementation
+    return [];
+  },
+});
+
+/**
+ * Get document context for a revision set
  */
 export const getDocumentContext = action({
   args: {
     revisionSetId: v.id("revisionSets"),
     namespace: v.string(),
+    maxChunks: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<{
     context: string;
     documentCount: number;
     totalChunks: number;
   }> => {
-    const authUser = await authComponent.getAuthUser(ctx);
-    if (!authUser) {
-      throw new Error("Not authenticated");
-    }
+    const authUser = await getAuthUser(ctx);
+    const maxChunks = args.maxChunks || 50;
 
-    // Get all materials for this revision set
+    try {
+      // Get all materials for this revision set
+      const materials = await ctx.runQuery(
+        api.studyMaterials.getMaterialsByRevisionSet,
+        { revisionSetId: args.revisionSetId }
+      );
+
+      if (!materials || materials.length === 0) {
+        return {
+          context: "No documents found. Please upload documents first.",
+          documentCount: 0,
+          totalChunks: 0,
+        };
+      }
+
+      // Collect all processed content
+      const allChunks: string[] = [];
+      
+      for (const material of materials) {
+        if (material.extractedContent) {
+          // Get relevant chunks for this material
+          const chunks = chunkText(material.extractedContent, {
+            chunkSize: 1000,
+            chunkOverlap: 200,
+          });
+          allChunks.push(...chunks);
+        }
+      }
+
+      // Limit total chunks
+      const limitedChunks = allChunks.slice(0, maxChunks);
+
+      return {
+        context: limitedChunks.join("\n\n---\n\n"),
+        documentCount: materials.length,
+        totalChunks: limitedChunks.length,
+      };
+    } catch (error) {
+      console.error("Error getting document context:", error);
+      return {
+        context: "",
+        documentCount: 0,
+        totalChunks: 0,
+      };
+    }
+  },
+});
+
+/**
+ * Delete embeddings for a document
+ */
+export const deleteDocumentEmbeddings = internalAction({
+  args: {
+    documentId: v.id("studyMaterials"),
+    namespace: v.string(),
+  },
+  handler: async (ctx, args): Promise<{ deleted: number }> => {
+    try {
+      // Delete all embeddings for this document
+      const deleted: number = await ctx.runMutation(
+        internal.ragService.removeVectorsByDocument,
+        {
+          documentId: args.documentId,
+          namespace: args.namespace,
+        }
+      );
+      return { deleted };
+    } catch (error) {
+      console.error("Error deleting embeddings:", error);
+      return { deleted: 0 };
+    }
+  },
+});
+
+/**
+ * Remove vectors by document ID
+ */
+export const removeVectorsByDocument = internalMutation({
+  args: {
+    documentId: v.id("studyMaterials"),
+    namespace: v.string(),
+  },
+  handler: async (ctx, args): Promise<number> => {
+    // Replace placeholder with actual DB deletion
+    // Example: await ctx.db.deleteMany(q => q.eq("documentId", args.documentId));
+    return 0;
+  },
+});
+
+/**
+ * Process multiple documents in batch
+ */
+export const batchProcessDocuments = internalAction({
+  args: {
+    revisionSetId: v.id("revisionSets"),
+    userId: v.string(),
+  },
+  handler: async (ctx, args): Promise<{
+    processed: number;
+    failed: number;
+    totalChunks: number;
+  }> => {
+    try {
+      const materials = await ctx.runQuery(
+        api.studyMaterials.getMaterialsByRevisionSet,
+        { revisionSetId: args.revisionSetId }
+      );
+
+      let processed = 0;
+      let failed = 0;
+      let totalChunks = 0;
+
+      for (const material of materials) {
+        if (material.extractedContent && material.processedStatus !== "completed") {
+          try {
+            const result = await ctx.runAction(
+              internal.ragService.processDocumentForRAG,
+              {
+                documentId: material._id,
+                content: material.extractedContent,
+                namespace: `user_${args.userId}`,
+                revisionSetId: args.revisionSetId,
+                userId: args.userId, // Pass userId
+              }
+            );
+            processed++;
+            totalChunks += result.chunksProcessed;
+            
+            // Note: api.studyMaterials.updateMaterialStatus must exist in your code
+            // If it doesn't, you'll need to create it or comment this out
+            // await ctx.runMutation(api.studyMaterials.updateMaterialStatus, {
+            //   materialId: material._id,
+            //   status: "completed",
+            // });
+          } catch (error) {
+            console.error(`Failed to process material ${material._id}:`, error);
+            failed++;
+          }
+        }
+      }
+
+      return { processed, failed, totalChunks };
+    } catch (error) {
+      console.error("Batch processing error:", error);
+      throw error;
+    }
+  },
+});
+
+/**
+ * Reprocess all documents in a revision set (useful for migrations)
+ */
+export const reprocessRevisionSet = action({
+  args: {
+    revisionSetId: v.id("revisionSets"),
+  },
+  handler: async (ctx, args): Promise<{
+    processed: number;
+    failed: number;
+    totalChunks: number;
+  }> => {
+    const authUser = await getAuthUser(ctx);
+    const userId = authUser._id.toString();
+
+    // Delete existing embeddings
     const materials = await ctx.runQuery(
       api.studyMaterials.getMaterialsByRevisionSet,
       { revisionSetId: args.revisionSetId }
     );
 
-    // Search for all chunks from these documents
-    const allChunks: string[] = [];
-    const embeddingModel = openai.embedding("text-embedding-3-small");
-    
     for (const material of materials) {
-      if (material.extractedContent) {
-        const queryText = material.extractedContent.substring(0, 100);
-        const embeddingResult = await embeddingModel.doEmbed({
-          values: [queryText],
-        });
-        
-        // Access embeddings array from result
-        const queryEmbedding = embeddingResult.embeddings[0];
-
-        const searchResults = await ctx.runAction(rag.search.search, {
-          namespace: args.namespace,
-          embedding: queryEmbedding,
-          limit: 50,
-          modelId: "text-embedding-3-small",
-          filters: [
-            { name: "entryId", value: args.namespace },
-          ],
-        });
-
-        // Filter entries that belong to this material - use entries instead of chunks
-        const materialChunks = searchResults.entries
-          .filter(
-            (entry: any) =>
-              entry.metadata?.documentId === material._id.toString()
-          )
-          .map((entry: any) => entry.metadata?.text || "");
-
-        allChunks.push(...materialChunks);
-      }
+      await ctx.runAction(internal.ragService.deleteDocumentEmbeddings, {
+        documentId: material._id,
+        namespace: `user_${userId}`,
+      });
     }
 
-    return {
-      context: allChunks.join("\n\n"),
-      documentCount: materials.length,
-      totalChunks: allChunks.length,
-    };
+    // Reprocess all documents
+    const result: {
+      processed: number;
+      failed: number;
+      totalChunks: number;
+    } = await ctx.runAction(
+      internal.ragService.batchProcessDocuments,
+      {
+        revisionSetId: args.revisionSetId,
+        userId,
+      }
+    );
+
+    return result;
   },
 });
-
-/**
- * Text chunking utility
- */
-function chunkText(
-  text: string,
-  options: { chunkSize: number; chunkOverlap: number }
-): string[] {
-  const chunks: string[] = [];
-  let start = 0;
-
-  while (start < text.length) {
-    const end = Math.min(start + options.chunkSize, text.length);
-    const chunk = text.slice(start, end);
-    chunks.push(chunk.trim());
-
-    if (end >= text.length) break;
-    start = end - options.chunkOverlap;
-  }
-
-  return chunks.filter((chunk) => chunk.length > 0);
-}

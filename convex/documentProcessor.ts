@@ -26,6 +26,8 @@ export const processDocumentAfterUpload = internalAction({
       documentId: args.materialId,
       content: material.extractedContent,
       namespace: `user_${args.authId}`,
+      userId: args.authId, // Add this line
+
     });
 
     return { success: true };

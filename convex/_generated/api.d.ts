@@ -28,6 +28,8 @@ import type * as playground from "../playground.js";
 import type * as privateData from "../privateData.js";
 import type * as progressTracking from "../progressTracking.js";
 import type * as quizzes from "../quizzes.js";
+import type * as ragMutations from "../ragMutations.js";
+import type * as ragQueries from "../ragQueries.js";
 import type * as ragService from "../ragService.js";
 import type * as rate from "../rate.js";
 import type * as revisionSets from "../revisionSets.js";
@@ -74,6 +76,8 @@ declare const fullApi: ApiFromModules<{
   privateData: typeof privateData;
   progressTracking: typeof progressTracking;
   quizzes: typeof quizzes;
+  ragMutations: typeof ragMutations;
+  ragQueries: typeof ragQueries;
   ragService: typeof ragService;
   rate: typeof rate;
   revisionSets: typeof revisionSets;
