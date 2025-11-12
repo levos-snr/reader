@@ -509,4 +509,22 @@ export default defineSchema({
     startedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
   }).index("by_document", ["documentId"]),
+
+  // AI Generation Feedback - For future LLM training
+  aiFeedback: defineTable({
+    revisionSetId: v.id("revisionSets"),
+    generationType: v.string(), // "quiz", "flashcard", "notes", "essay", "tutor"
+    generationId: v.optional(v.string()), // ID of the generated item
+    inputContext: v.optional(v.string()), // The context/query used
+    output: v.string(), // The generated output
+    userRating: v.optional(v.number()), // 1-5 rating
+    userFeedback: v.optional(v.string()), // User's text feedback
+    userEdits: v.optional(v.string()), // User's edited version
+    wasUseful: v.optional(v.boolean()), // Whether user found it useful
+    authId: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_revisionSet", ["revisionSetId"])
+    .index("by_authId", ["authId"])
+    .index("by_type", ["generationType"]),
 })

@@ -11,7 +11,8 @@ function isValidAuthUser(
 
 // Helper function to get authId from Better Auth user
 function getAuthId(authUser: any): string {
-  return authUser.userId || authUser._id.toString()
+  // Better Auth uses userId field, fallback to _id
+  return authUser.userId || authUser._id?.toString() || authUser.id || "";
 }
 
 // Manually sync current user to app's user table

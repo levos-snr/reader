@@ -1,13 +1,32 @@
 // convex/documentProcessing.ts
-import { internalAction, internalMutation } from "./_generated/server";
+// DEPRECATED: Use aiPipeline.processDocument instead
+// This file is kept for backward compatibility but redirects to new pipeline
+
+import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 
 /**
- * Process uploaded document and extract text content
- * This action handles PDF, DOCX, TXT files and extracts readable text
+ * Process uploaded document - redirects to new AI pipeline
  */
 export const processDocument = internalAction({
+  args: {
+    materialId: v.id("studyMaterials"),
+    fileId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    // Redirect to new AI pipeline
+    return await ctx.runAction(internal.aiPipeline.processDocument, {
+      materialId: args.materialId,
+      fileId: args.fileId,
+    });
+  },
+});
+
+/**
+ * Legacy function - kept for compatibility
+ */
+export const processDocumentLegacy = internalAction({
   args: {
     materialId: v.id("studyMaterials"),
     fileId: v.id("_storage"),

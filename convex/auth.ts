@@ -30,6 +30,8 @@ function createAuth(ctx: GenericCtx<DataModel>, { optionsOnly }: { optionsOnly?:
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false,
+      // Optimize password hashing
+      minPasswordLength: 8,
     },
     socialProviders: {
       google: {
@@ -39,8 +41,13 @@ function createAuth(ctx: GenericCtx<DataModel>, { optionsOnly }: { optionsOnly?:
     },
     plugins: [
       convex(),
-      admin(), // Remove the isAdmin option - handle admin checks in your queries/mutations
+      admin(),
     ],
+    // Optimize session handling
+    session: {
+      expiresIn: 60 * 60 * 24 * 7, // 7 days
+      updateAge: 60 * 60 * 24, // 1 day
+    },
   }
   return betterAuth(config)
 }
