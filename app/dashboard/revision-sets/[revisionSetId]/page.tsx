@@ -43,6 +43,7 @@ export default function RevisionSetPage() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
 
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   const revisionSetById = useQuery(
     api.revisionSets.getRevisionSetWithContent,
     isValidId ? { revisionSetId: revisionSetParam as any } : "skip"
@@ -70,6 +71,11 @@ export default function RevisionSetPage() {
   const generateEssayAI = useAction(api.aiAgents.generateEssay)
   const chatWithTutorAI = useAction(api.aiAgents.chatWithTutor)
 
+  // Mutations for creating content
+  const createQuizMutation = useMutation(api.quizzes.createQuizForRevisionSet)
+  const createFlashcardsMutation = useMutation(api.flashcards.createFlashcard)
+  const createNoteMutation = useMutation(api.smartNotes.createSmartNote)
+
   // State for different tabs
   const [quizTopic, setQuizTopic] = useState("")
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false)
@@ -87,6 +93,7 @@ export default function RevisionSetPage() {
     }
   }, [isValidId, router])
 
+  // Early returns AFTER all hooks
   if (!revisionSetById && !revisionSetBySlug) return null
 
   if (revisionSet === undefined) {
@@ -171,10 +178,6 @@ export default function RevisionSetPage() {
       setIsUploading(false)
     }
   }
-
-  const createQuizMutation = useMutation(api.quizzes.createQuizForRevisionSet)
-  const createFlashcardsMutation = useMutation(api.flashcards.createFlashcard)
-  const createNoteMutation = useMutation(api.smartNotes.createSmartNote)
 
   const handleGenerateQuiz = async () => {
     if (!quizTopic.trim()) {
