@@ -2,7 +2,7 @@
 // DEPRECATED: Use aiPipeline.processDocument instead
 // This file is kept for backward compatibility but redirects to new pipeline
 
-import { internalAction } from "./_generated/server";
+import { internalAction,internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 

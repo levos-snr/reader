@@ -10,6 +10,9 @@
 
 import type * as admin from "../admin.js";
 import type * as aiActions from "../aiActions.js";
+import type * as aiAgents from "../aiAgents.js";
+import type * as aiFeedback from "../aiFeedback.js";
+import type * as aiPipeline from "../aiPipeline.js";
 import type * as auth from "../auth.js";
 import type * as authHelper from "../authHelper.js";
 import type * as courses from "../courses.js";
@@ -47,6 +50,9 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   aiActions: typeof aiActions;
+  aiAgents: typeof aiAgents;
+  aiFeedback: typeof aiFeedback;
+  aiPipeline: typeof aiPipeline;
   auth: typeof auth;
   authHelper: typeof authHelper;
   courses: typeof courses;
