@@ -1,7 +1,8 @@
+// convex/studyMaterials.ts
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { authComponent } from "./auth"
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api"
 
 async function getAuthUser(ctx: any) {
   const authUser = await authComponent.getAuthUser(ctx)
@@ -19,7 +20,7 @@ export const generateUploadUrl = mutation({
   },
 })
 
-// Create study material
+// Create study material and trigger processing
 export const createStudyMaterial = mutation({
   args: {
     revisionSetId: v.id("revisionSets"),
@@ -37,6 +38,7 @@ export const createStudyMaterial = mutation({
       throw new Error("Revision set not found or unauthorized")
     }
 
+    // Create material record
     const materialId = await ctx.db.insert("studyMaterials", {
       revisionSetId: args.revisionSetId,
       title: args.title,
@@ -48,94 +50,12 @@ export const createStudyMaterial = mutation({
       uploadedAt: Date.now(),
     })
 
-    // Best-effort text extraction for PDFs/images/docs so AI features have content
-    // Uses OpenAI (or OpenRouter) if keys are configured; otherwise leaves as pending
-    try {
-      if (args.fileId) {
-        const fileUrl = await ctx.storage.getUrl(args.fileId)
-        if (fileUrl) {
-          // Choose provider by env; prefer OpenAI
-          const openaiKey = process.env.OPENAI_API_KEY
-          const openrouterKey = process.env.OPENROUTER_API_KEY
-
-          let extractedText: string | null = null
-
-          if (openaiKey) {
-            // Send URL to GPT-4o to extract plain text summary/content
-            const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${openaiKey}`,
-              },
-              body: JSON.stringify({
-                model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-                messages: [
-                  {
-                    role: "system",
-                    content:
-                      "You extract readable study text from files. Return ONLY clean plain text without markdown, no headings repeated, no images.",
-                  },
-                  {
-                    role: "user",
-                    content: `Extract the main textual content from this file for study purposes. If it's an image or scanned PDF, perform OCR. File: ${fileUrl}`,
-                  },
-                ],
-                max_tokens: 3500,
-                temperature: 0,
-              }),
-            })
-            if (resp.ok) {
-              const data = await resp.json()
-              extractedText = data.choices?.[0]?.message?.content?.toString() || null
-            }
-          } else if (openrouterKey) {
-            const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${openrouterKey}`,
-                "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-                "X-Title": "GizmoReader",
-              },
-              body: JSON.stringify({
-                model: process.env.OPENROUTER_MODEL || "openrouter/auto",
-                messages: [
-                  {
-                    role: "system",
-                    content:
-                      "You extract readable study text from files. Return ONLY clean plain text without markdown, no headings repeated, no images.",
-                  },
-                  {
-                    role: "user",
-                    content: `Extract the main textual content from this file for study purposes. If it's an image or scanned PDF, perform OCR. File: ${fileUrl}`,
-                  },
-                ],
-                max_tokens: 3500,
-                temperature: 0,
-              }),
-            })
-            if (resp.ok) {
-              const data = await resp.json()
-              extractedText = data.choices?.[0]?.message?.content?.toString() || null
-            }
-          }
-
-          if (extractedText && extractedText.trim().length > 0) {
-            await ctx.db.patch(materialId, {
-              extractedContent: extractedText.slice(0, 100000),
-              processedStatus: "completed",
-            })
-          } else {
-            await ctx.db.patch(materialId, { processedStatus: "failed" })
-          }
-        }
-      }
-    } catch (e) {
-      // Non-fatal: leave as pending/failed; UI will still allow manual usage
-      try {
-        await ctx.db.patch(materialId, { processedStatus: "failed" })
-      } catch {}
+    // Trigger async document processing if file exists
+    if (args.fileId) {
+      await ctx.scheduler.runAfter(0, internal.documentProcessing.processDocument, {
+        materialId,
+        fileId: args.fileId,
+      })
     }
 
     return materialId
@@ -199,16 +119,46 @@ export const getFileUrl = query({
 export const getMaterialById = query({
   args: { materialId: v.id("studyMaterials") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.materialId);
+    return await ctx.db.get(args.materialId)
   },
-});
+})
 
 // Get revision set ID for a material
 export const getMaterialRevisionSet = query({
   args: { materialId: v.id("studyMaterials") },
   handler: async (ctx, args) => {
-    const material = await ctx.db.get(args.materialId);
-    return material?.revisionSetId;
+    const material = await ctx.db.get(args.materialId)
+    return material?.revisionSetId
   },
-});
+})
 
+// Retry processing for failed materials
+export const retryProcessing = mutation({
+  args: { materialId: v.id("studyMaterials") },
+  handler: async (ctx, args) => {
+    const authUser = await getAuthUser(ctx)
+    const authId = authUser._id.toString()
+
+    const material = await ctx.db.get(args.materialId)
+    if (!material || material.authId !== authId) {
+      throw new Error("Material not found or unauthorized")
+    }
+
+    if (!material.fileId) {
+      throw new Error("No file to process")
+    }
+
+    // Update status to pending
+    await ctx.db.patch(args.materialId, {
+      processedStatus: "pending",
+    })
+
+    // Trigger processing again
+    await ctx.scheduler.runAfter(0, internal.documentProcessing.processDocument, {
+      materialId: args.materialId,
+      fileId: material.fileId,
+    })
+
+    return { success: true }
+  },
+})

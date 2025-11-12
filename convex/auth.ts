@@ -22,7 +22,7 @@ function createAuth(ctx: GenericCtx<DataModel>, { optionsOnly }: { optionsOnly?:
       disabled: optionsOnly,
     },
     baseURL,
-    trustedOrigins: ["http://localhost:3000", "http://localhost:3001", process.env.NEXT_PUBLIC_APP_URL || ""].filter(
+    trustedOrigins: ["http://localhost:3000", "http://localhost:3001","https://localhost:3000", process.env.NEXT_PUBLIC_APP_URL || ""].filter(
       Boolean,
     ),
     secret: process.env.BETTER_AUTH_SECRET || "dev-secret-key-change-me",

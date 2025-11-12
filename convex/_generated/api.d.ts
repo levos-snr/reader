@@ -9,35 +9,24 @@
  */
 
 import type * as admin from "../admin.js";
-import type * as agents from "../agents.js";
 import type * as aiActions from "../aiActions.js";
-import type * as aiActionsWithRAG from "../aiActionsWithRAG.js";
-import type * as aiAgents from "../aiAgents.js";
 import type * as auth from "../auth.js";
 import type * as authHelper from "../authHelper.js";
-import type * as chatAgent from "../chatAgent.js";
 import type * as courses from "../courses.js";
 import type * as dashboard from "../dashboard.js";
-import type * as documentProcessor from "../documentProcessor.js";
+import type * as documentProcessing from "../documentProcessing.js";
 import type * as flashcards from "../flashcards.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as http from "../http.js";
 import type * as materials from "../materials.js";
 import type * as pastPapers from "../pastPapers.js";
-import type * as playground from "../playground.js";
 import type * as privateData from "../privateData.js";
 import type * as progressTracking from "../progressTracking.js";
 import type * as quizzes from "../quizzes.js";
-import type * as ragMutations from "../ragMutations.js";
-import type * as ragQueries from "../ragQueries.js";
-import type * as ragService from "../ragService.js";
-import type * as rate from "../rate.js";
 import type * as revisionSets from "../revisionSets.js";
 import type * as smartNotes from "../smartNotes.js";
 import type * as streaks from "../streaks.js";
 import type * as studyMaterials from "../studyMaterials.js";
-import type * as studySets from "../studySets.js";
-import type * as tutorChat from "../tutorChat.js";
 import type * as userHooks from "../userHooks.js";
 import type * as users from "../users.js";
 
@@ -57,35 +46,24 @@ import type {
  */
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
-  agents: typeof agents;
   aiActions: typeof aiActions;
-  aiActionsWithRAG: typeof aiActionsWithRAG;
-  aiAgents: typeof aiAgents;
   auth: typeof auth;
   authHelper: typeof authHelper;
-  chatAgent: typeof chatAgent;
   courses: typeof courses;
   dashboard: typeof dashboard;
-  documentProcessor: typeof documentProcessor;
+  documentProcessing: typeof documentProcessing;
   flashcards: typeof flashcards;
   healthCheck: typeof healthCheck;
   http: typeof http;
   materials: typeof materials;
   pastPapers: typeof pastPapers;
-  playground: typeof playground;
   privateData: typeof privateData;
   progressTracking: typeof progressTracking;
   quizzes: typeof quizzes;
-  ragMutations: typeof ragMutations;
-  ragQueries: typeof ragQueries;
-  ragService: typeof ragService;
-  rate: typeof rate;
   revisionSets: typeof revisionSets;
   smartNotes: typeof smartNotes;
   streaks: typeof streaks;
   studyMaterials: typeof studyMaterials;
-  studySets: typeof studySets;
-  tutorChat: typeof tutorChat;
   userHooks: typeof userHooks;
   users: typeof users;
 }>;
