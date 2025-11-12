@@ -14,7 +14,7 @@ export const processDocument = internalAction({
     materialId: v.id("studyMaterials"),
     fileId: v.id("_storage"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: any, args: { materialId: any; fileId: any }): Promise<{ success: boolean; textLength?: number }> => {
     // Redirect to new AI pipeline
     return await ctx.runAction(internal.aiPipeline.processDocument, {
       materialId: args.materialId,
